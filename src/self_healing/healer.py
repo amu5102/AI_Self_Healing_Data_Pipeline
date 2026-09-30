@@ -112,3 +112,138 @@ def verify_healing(df, expected_columns):
         )
 
     return False
+
+def apply_null_healing(df, root_cause):
+    """
+    Automatically repair NULL values using
+    column-specific healing rules.
+    """
+
+    if root_cause is None:
+        print("No NULL healing required")
+        return df, False
+
+    if root_cause.get("root_cause_type") != "MISSING_DATA":
+        print("No NULL healing rule available")
+        return df, False
+
+    healed = False
+
+    affected_columns = root_cause.get(
+        "affected_columns",
+        []
+    )
+
+    # Heal missing email values
+    if "email" in affected_columns:
+
+        null_count = df["email"].isnull().sum()
+
+        df["email"] = df["email"].fillna(
+            "unknown@email.com"
+        )
+
+        print(
+            f"NULL healing applied to email: "
+            f"{null_count} value(s) replaced"
+        )
+
+        healed = True
+
+    # Heal missing age values
+    if "age" in affected_columns:
+
+        null_count = df["age"].isnull().sum()
+
+        median_age = df["age"].median()
+
+        df["age"] = df["age"].fillna(
+            median_age
+        )
+
+        print(
+            f"NULL healing applied to age: "
+            f"{null_count} value(s) replaced "
+            f"with median age {median_age}"
+        )
+
+        healed = True
+
+    return df, healed
+
+def verify_null_healing(df):
+    """
+    Verify that no NULL values remain after healing.
+    """
+
+    null_counts = df.isnull().sum()
+
+    remaining_nulls = {
+        column: int(count)
+        for column, count in null_counts.items()
+        if count > 0
+    }
+
+    if not remaining_nulls:
+        print("\nNULL healing verification PASSED")
+        print("No NULL values remain in the dataset")
+        return True
+
+    print("\nNULL healing verification FAILED")
+    print(
+        f"Remaining NULL values: {remaining_nulls}"
+    )
+
+    return False
+
+def apply_duplicate_healing(df, root_cause):
+    """
+    Automatically remove duplicate records.
+    """
+
+    if root_cause is None:
+        print("No duplicate healing required")
+        return df, False
+
+    if root_cause.get("root_cause_type") != "DUPLICATE_RECORDS":
+        print("No duplicate healing rule available")
+        return df, False
+
+    duplicate_count = int(df.duplicated().sum())
+
+    if duplicate_count == 0:
+        print("No duplicate records found")
+        return df, False
+
+    df = df.drop_duplicates().copy()
+
+    print(
+        f"Duplicate healing applied: "
+        f"{duplicate_count} duplicate record(s) removed"
+    )
+
+    return df, True
+
+def verify_duplicate_healing(df):
+    """
+    Verify that no duplicate records remain.
+    """
+
+    remaining_duplicates = int(
+        df.duplicated().sum()
+    )
+
+    if remaining_duplicates == 0:
+
+        print("\nDuplicate healing verification PASSED")
+        print("No duplicate records remain in the dataset")
+
+        return True
+
+    print("\nDuplicate healing verification FAILED")
+    print(
+        f"Remaining duplicate records: "
+        f"{remaining_duplicates}"
+    )
+
+    return False

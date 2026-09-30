@@ -66,7 +66,6 @@ def analyze_schema_failure(failure):
 
     return root_cause
 
-
 def print_root_cause_report(root_cause):
     """Display the root cause analysis."""
 
@@ -91,18 +90,115 @@ def print_root_cause_report(root_cause):
         f"{root_cause['confidence']}"
     )
 
-    if root_cause["possible_mappings"]:
+    # Schema-change RCA
+    if root_cause["root_cause_type"] == "POSSIBLE_COLUMN_RENAME":
 
-        print("\nPossible Column Mapping:")
+        if root_cause.get("possible_mappings"):
 
-        for mapping in root_cause["possible_mappings"]:
+            print("\nPossible Column Mapping:")
 
-            print(
-                f"  {mapping['actual_column']} "
-                f"→ "
-                f"{mapping['expected_column']} "
-                f"(similarity: "
-                f"{mapping['similarity']})"
-            )
+            for mapping in root_cause["possible_mappings"]:
+
+                print(
+                    f"  {mapping['actual_column']} "
+                    f"→ "
+                    f"{mapping['expected_column']} "
+                    f"(similarity: "
+                    f"{mapping['similarity']})"
+                )
+
+    # NULL-data RCA
+    elif root_cause["root_cause_type"] == "MISSING_DATA":
+
+        print(
+            f"\nAffected Columns: "
+            f"{root_cause['affected_columns']}"
+        )
+
+        print(
+            f"NULL Counts     : "
+            f"{root_cause['null_counts']}"
+        )
+
+        print(
+            f"Total NULLs     : "
+            f"{root_cause['total_nulls']}"
+        )
 
     print("==========================================\n")
+
+def analyze_null_failure(failure):
+    """
+    Analyze a NULL-data failure and identify
+    the affected columns.
+    """
+
+    if failure is None:
+        return None
+
+    null_columns = failure.get(
+        "null_columns",
+        {}
+    )
+
+    if not null_columns:
+        return {
+            "root_cause_type": "NO_NULL_DATA",
+            "description": "No NULL values were detected.",
+            "confidence": "HIGH"
+        }
+
+    affected_columns = list(
+        null_columns.keys()
+    )
+
+    total_nulls = sum(
+        null_columns.values()
+    )
+
+    root_cause = {
+        "root_cause_type": "MISSING_DATA",
+        "description": (
+            "Required data is missing from "
+            "one or more columns."
+        ),
+        "affected_columns": affected_columns,
+        "null_counts": null_columns,
+        "total_nulls": total_nulls,
+        "confidence": "HIGH"
+    }
+
+    return root_cause
+
+def analyze_duplicate_failure(failure):
+    """
+    Analyze a duplicate-data failure and identify
+    the number of duplicate records.
+    """
+
+    if failure is None:
+        return None
+
+    duplicate_count = failure.get(
+        "duplicate_count",
+        0
+    )
+
+    if duplicate_count == 0:
+        return {
+            "root_cause_type": "NO_DUPLICATES",
+            "description": "No duplicate records were detected.",
+            "confidence": "HIGH"
+        }
+
+    root_cause = {
+        "root_cause_type": "DUPLICATE_RECORDS",
+        "description": (
+            "One or more duplicate records were "
+            "detected in the input dataset."
+        ),
+        "duplicate_count": duplicate_count,
+        "confidence": "HIGH"
+    }
+
+    return root_cause
