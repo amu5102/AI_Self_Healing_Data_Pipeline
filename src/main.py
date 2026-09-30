@@ -1,5 +1,8 @@
 import pandas as pd
 
+from src.transformation.transform import transform_data
+from src.load import load_to_database
+
 from src.validation.validate import (
     EXPECTED_COLUMNS,
     validate_data
@@ -23,7 +26,7 @@ from src.self_healing.healer import (
 
 def run_pipeline(file_path):
     """
-    Run the complete self-healing data pipeline.
+    Run the complete AI self-healing data pipeline.
     """
 
     print("\n")
@@ -52,101 +55,131 @@ def run_pipeline(file_path):
     validation_result = validate_data(df)
 
     # ------------------------------------------
-    # STEP 3: CHECK VALIDATION RESULT
+    # STEP 3: FAILURE DETECTION
     # ------------------------------------------
 
-    if validation_result:
+    if not validation_result:
 
-        print("\nData validation successful.")
+        print("\n[3] FAILURE DETECTION")
+
+        actual_columns = list(df.columns)
+
+        failure = detect_schema_failure(
+            EXPECTED_COLUMNS,
+            actual_columns
+        )
+
+        print_failure_report(failure)
+
+        # --------------------------------------
+        # STEP 4: ROOT CAUSE ANALYSIS
+        # --------------------------------------
+
+        print("\n[4] ROOT CAUSE ANALYSIS")
+
+        root_cause = analyze_schema_failure(
+            failure
+        )
+
+        print_root_cause_report(root_cause)
+
+        # --------------------------------------
+        # STEP 5: SELF-HEALING
+        # --------------------------------------
+
+        print("\n[5] SELF-HEALING")
+
+        df, healed = apply_schema_healing(
+            df,
+            root_cause
+        )
+
+        if not healed:
+
+            print("\nSelf-healing was not successful.")
+            print("Pipeline stopped.")
+
+            return None
+
+        # --------------------------------------
+        # STEP 6: VERIFY HEALING
+        # --------------------------------------
+
+        print("\n[6] HEALING VERIFICATION")
+
+        verification_result = verify_healing(
+            df,
+            EXPECTED_COLUMNS
+        )
+
+        if not verification_result:
+
+            print("\nHealing verification failed.")
+            print("Pipeline stopped.")
+
+            return None
+
+    else:
+
+        print("\n[3] FAILURE DETECTION")
+
+        print("No failure detected.")
+
+        print("\n[4] ROOT CAUSE ANALYSIS")
+
+        print("No root cause analysis required.")
+
+        print("\n[5] SELF-HEALING")
+
+        print("No healing action required.")
+
+        print("\n[6] HEALING VERIFICATION")
+
         print("No healing required.")
 
-        return df
-
     # ------------------------------------------
-    # STEP 4: FAILURE DETECTION
+    # STEP 7: DATA TRANSFORMATION
     # ------------------------------------------
 
-    print("\n[3] FAILURE DETECTION")
+    print("\n[7] DATA TRANSFORMATION")
 
-    actual_columns = list(df.columns)
-
-    failure = detect_schema_failure(
-        EXPECTED_COLUMNS,
-        actual_columns
-    )
-
-    print_failure_report(failure)
+    df = transform_data(df)
 
     # ------------------------------------------
-    # STEP 5: ROOT CAUSE ANALYSIS
+    # STEP 8: SQL DATABASE LOADING
     # ------------------------------------------
 
-    print("\n[4] ROOT CAUSE ANALYSIS")
+    print("\n[8] SQL DATABASE LOADING")
 
-    root_cause = analyze_schema_failure(
-        failure
-    )
+    database_result = load_to_database(df)
 
-    print_root_cause_report(root_cause)
+    if not database_result:
 
-    # ------------------------------------------
-    # STEP 6: SELF-HEALING
-    # ------------------------------------------
-
-    print("\n[5] SELF-HEALING")
-
-    df, healed = apply_schema_healing(
-        df,
-        root_cause
-    )
-
-    if not healed:
-
-        print("\nSelf-healing was not successful.")
+        print("\nDatabase loading failed.")
         print("Pipeline stopped.")
 
         return None
 
     # ------------------------------------------
-    # STEP 7: VERIFY HEALING
-    # ------------------------------------------
-
-    print("\n[6] HEALING VERIFICATION")
-
-    verification_result = verify_healing(
-        df,
-        EXPECTED_COLUMNS
-    )
-
-    # ------------------------------------------
-    # STEP 8: FINAL RESULT
+    # STEP 9: FINAL PIPELINE RESULT
     # ------------------------------------------
 
     print("\n==============================================")
+    print("FINAL PIPELINE STATUS: SUCCESS")
+    print("==============================================")
 
-    if verification_result:
+    print("\nFinal Columns:")
+    print(list(df.columns))
 
-        print("FINAL PIPELINE STATUS: SUCCESS")
+    print(f"\nFinal rows processed: {len(df)}")
 
-        print("==============================================")
-
-        print("\nFinal Columns:")
-        print(list(df.columns))
-
-        return df
-
-    else:
-
-        print("FINAL PIPELINE STATUS: FAILED")
-
-        print("==============================================")
-
-        return None
+    return df
 
 
 if __name__ == "__main__":
 
     # Test with schema-changed data
+
     file_path = "data/raw/customers_schema_changed.csv"
 
     result = run_pipeline(file_path)
@@ -154,7 +187,6 @@ if __name__ == "__main__":
     if result is not None:
 
         print("\nPipeline completed successfully.")
-        print(f"Final rows processed: {len(result)}")
 
     else:
 
