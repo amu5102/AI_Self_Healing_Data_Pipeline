@@ -17,7 +17,7 @@ def extract_data(file_path):
 
 if __name__ == "__main__":
 
-    file_path = "data/raw/customers_schema_changed.csv"
+    file_path = "data/raw/customers.csv"
 
     df = extract_data(file_path)
 

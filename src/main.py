@@ -14,6 +14,7 @@ from src.failure_detection.detector import (
     detect_schema_failure,
     detect_null_failure,
     detect_duplicate_failure,
+    detect_data_type_failure,
     print_failure_report
 )
 
@@ -21,6 +22,7 @@ from src.root_cause.analyzer import (
     analyze_schema_failure,
     analyze_null_failure,
     analyze_duplicate_failure,
+    analyze_data_type_failure,
     print_root_cause_report
 )
 
@@ -30,8 +32,12 @@ from src.self_healing.healer import (
     apply_null_healing,
     verify_null_healing,
     apply_duplicate_healing,
-    verify_duplicate_healing
+    verify_duplicate_healing,
+    apply_data_type_healing,
+    verify_data_type_healing
 )
+
+from src.ml.predictor import predict_failure
 
 
 def run_pipeline(file_path):
@@ -75,7 +81,9 @@ def run_pipeline(file_path):
     null_failure = detect_null_failure(df)
     
     duplicate_failure = detect_duplicate_failure(df)
-
+    
+    data_type_failure = detect_data_type_failure(df)
+    
     if schema_failure is not None:
 
         failure = schema_failure
@@ -90,6 +98,19 @@ def run_pipeline(file_path):
         )
 
         print_root_cause_report(root_cause)
+        
+        ml_prediction = predict_failure(
+            severity=failure["severity"],
+            root_cause_type=root_cause["root_cause_type"],
+            confidence=root_cause["confidence"],
+            duplicate_count=0,
+            null_count=0,
+            schema_change=1
+        )
+
+        print("\n========== ML FAILURE PREDICTION ==========")
+        print(f"Predicted Failure Type : {ml_prediction}")
+        print("==========================================")
 
         # STEP 5: SELF-HEALING
         print("\n[5] SELF-HEALING")
@@ -162,7 +183,20 @@ def run_pipeline(file_path):
         )
 
         print_root_cause_report(root_cause)
+        
+        ml_prediction = predict_failure(
+            severity=failure["severity"],
+            root_cause_type=root_cause["root_cause_type"],
+            confidence=root_cause["confidence"],
+            duplicate_count=0,
+            null_count=sum(failure["null_columns"].values()),
+            schema_change=0
+        )
 
+        print("\n========== ML FAILURE PREDICTION ==========")
+        print(f"Predicted Failure Type : {ml_prediction}")
+        print("==========================================")
+        
         # STEP 5: SELF-HEALING
         print("\n[5] SELF-HEALING")
 
@@ -230,6 +264,19 @@ def run_pipeline(file_path):
         )
 
         print_root_cause_report(root_cause)
+        
+        ml_prediction = predict_failure(
+            severity=failure["severity"],
+            root_cause_type=root_cause["root_cause_type"],
+            confidence=root_cause["confidence"],
+            duplicate_count=failure["duplicate_count"],
+            null_count=0,
+            schema_change=0
+        )
+
+        print("\n========== ML FAILURE PREDICTION ==========")
+        print(f"Predicted Failure Type : {ml_prediction}")
+        print("==========================================")
 
         # STEP 5: SELF-HEALING
         print("\n[5] SELF-HEALING")
@@ -283,6 +330,92 @@ def run_pipeline(file_path):
         )
 
         failure_status = "HEALED"
+    
+    elif data_type_failure is not None:
+    
+        failure = data_type_failure
+
+        print_failure_report(failure)
+
+        # STEP 4: ROOT CAUSE ANALYSIS
+        print("\n[4] ROOT CAUSE ANALYSIS")
+
+        root_cause = analyze_data_type_failure(
+            failure,
+            df
+        )
+
+        print_root_cause_report(root_cause)
+
+        # STEP 5: SELF-HEALING
+        print("\n[5] SELF-HEALING")
+
+        df, healed = apply_data_type_healing(
+            df,
+            root_cause
+        )
+
+        if not healed:
+    
+            print("\nAutomatic data type healing was not possible.")
+            print("Manual review is required.")
+            print("Pipeline stopped.")
+
+            healing_action = (
+                "Manual review required for invalid data type"
+            )
+
+            failure_status = "FAILED"
+
+            log_failure(
+                failure,
+                root_cause,
+                healing_action,
+                failure_status
+            )
+
+            return None
+
+        else:
+
+            healing_action = (
+                "Safely converted invalid data type values"
+            )
+
+            failure_status = "HEALED"
+
+        # STEP 6: HEALING VERIFICATION
+        print("\n[6] HEALING VERIFICATION")
+
+        if healed:
+
+            verification_result = verify_data_type_healing(
+                df,
+                root_cause.get(
+                    "affected_columns",
+                    []
+                )
+            )
+
+            if not verification_result:
+
+                print("Pipeline stopped.")
+
+                log_failure(
+                    failure,
+                    root_cause,
+                    healing_action,
+                    "FAILED"
+                )
+
+                return None
+
+        else:
+
+            print(
+                "Verification skipped because "
+                "healing was not successful."
+            )
     
     else:
 
@@ -339,7 +472,7 @@ if __name__ == "__main__":
 
     # Test with schema-changed data
 
-    file_path = "data/raw/customers_duplicates.csv"
+    file_path = "data/raw/customers.csv"
 
     result = run_pipeline(file_path)
 

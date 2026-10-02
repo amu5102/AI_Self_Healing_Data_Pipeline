@@ -1,3 +1,4 @@
+import pandas as pd
 from datetime import datetime
 
 
@@ -119,6 +120,34 @@ def detect_duplicate_failure(df):
         "failure_type": "DUPLICATE_DATA",
         "severity": "MEDIUM",
         "duplicate_count": duplicate_count,
+        "detected_at": datetime.now().isoformat()
+    }
+
+    return failure
+
+def detect_data_type_failure(df):
+    """
+    Detect invalid data types in important columns.
+    """
+
+    failures = []
+
+    if "customer_id" in df.columns:
+        if not pd.api.types.is_numeric_dtype(df["customer_id"]):
+            failures.append("customer_id")
+
+    if "age" in df.columns:
+        if not pd.api.types.is_numeric_dtype(df["age"]):
+            failures.append("age")
+
+    if not failures:
+        return None
+
+    failure = {
+        "failure_id": f"F-TYPE-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "failure_type": "DATA_TYPE_ERROR",
+        "severity": "HIGH",
+        "invalid_columns": failures,
         "detected_at": datetime.now().isoformat()
     }
 

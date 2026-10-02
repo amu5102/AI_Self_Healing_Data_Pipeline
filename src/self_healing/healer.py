@@ -1,3 +1,5 @@
+import pandas as pd
+
 def rename_column(df, old_name, new_name):
     """
     Rename a column in the DataFrame.
@@ -247,3 +249,103 @@ def verify_duplicate_healing(df):
     )
 
     return False
+
+def apply_data_type_healing(df, root_cause):
+    """
+    Safely repair data type errors.
+
+    Only values that can be safely converted to numeric
+    are automatically healed. Invalid text values are
+    not guessed or modified.
+    """
+
+    if root_cause is None:
+        print("No data type healing required")
+        return df, False
+
+    if root_cause.get("root_cause_type") != "INVALID_DATA_TYPE":
+        print("No data type healing rule available")
+        return df, False
+
+    healed = False
+
+    affected_columns = root_cause.get(
+        "affected_columns",
+        []
+    )
+
+    for column in affected_columns:
+
+        if column not in df.columns:
+            continue
+
+        # Check which values cannot be converted safely
+        converted = pd.to_numeric(
+            df[column],
+            errors="coerce"
+        )
+
+        invalid_mask = (
+            converted.isna()
+            & df[column].notna()
+        )
+
+        invalid_values = df.loc[
+            invalid_mask,
+            column
+        ].tolist()
+
+        if invalid_values:
+
+            print(
+                f"Data type healing FAILED for "
+                f"column '{column}'"
+            )
+
+            print(
+                f"Invalid value(s) require manual review: "
+                f"{invalid_values}"
+            )
+
+            continue
+
+        # Safe conversion
+        df[column] = converted
+
+        print(
+            f"Data type healing applied to "
+            f"column '{column}'"
+        )
+
+        healed = True
+
+    return df, healed
+
+def verify_data_type_healing(df, affected_columns):
+    """
+    Verify that affected columns contain valid numeric data.
+    """
+
+    for column in affected_columns:
+
+        if column not in df.columns:
+            print(
+                f"Data type verification FAILED: "
+                f"column '{column}' not found"
+            )
+            return False
+
+        if not pd.api.types.is_numeric_dtype(
+            df[column]
+        ):
+            print(
+                f"Data type verification FAILED: "
+                f"column '{column}' is not numeric"
+            )
+            return False
+
+    print(
+        "\nData type healing verification PASSED"
+    )
+
+    return True

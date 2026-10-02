@@ -1,3 +1,4 @@
+import pandas as pd
 from difflib import SequenceMatcher
 
 
@@ -106,7 +107,25 @@ def print_root_cause_report(root_cause):
                     f"(similarity: "
                     f"{mapping['similarity']})"
                 )
+    
+        # Data-type RCA
+    elif root_cause["root_cause_type"] == "INVALID_DATA_TYPE":
 
+        print(
+            f"\nAffected Columns: "
+            f"{root_cause['affected_columns']}"
+        )
+
+        print(
+            f"Expected Type   : "
+            f"{root_cause['expected_type']}"
+        )
+
+        print(
+            f"Invalid Values  : "
+            f"{root_cause['invalid_values']}"
+        )
+    
     # NULL-data RCA
     elif root_cause["root_cause_type"] == "MISSING_DATA":
 
@@ -198,6 +217,64 @@ def analyze_duplicate_failure(failure):
             "detected in the input dataset."
         ),
         "duplicate_count": duplicate_count,
+        "confidence": "HIGH"
+    }
+
+    return root_cause
+
+def analyze_data_type_failure(failure, df):
+    """
+    Analyze a data type failure and identify
+    invalid columns and values.
+    """
+
+    if failure is None:
+        return None
+
+    invalid_columns = failure.get(
+        "invalid_columns",
+        []
+    )
+
+    invalid_values = {}
+
+    for column in invalid_columns:
+
+        if column not in df.columns:
+            continue
+
+        if column == "customer_id":
+            invalid_rows = df[
+                ~pd.to_numeric(
+                    df[column],
+                    errors="coerce"
+                ).notna()
+            ]
+
+        elif column == "age":
+            invalid_rows = df[
+                ~pd.to_numeric(
+                    df[column],
+                    errors="coerce"
+                ).notna()
+            ]
+
+        else:
+            invalid_rows = df.iloc[0:0]
+
+        invalid_values[column] = (
+            invalid_rows[column].tolist()
+        )
+
+    root_cause = {
+        "root_cause_type": "INVALID_DATA_TYPE",
+        "description": (
+            "One or more columns contain values "
+            "that do not match the expected data type."
+        ),
+        "affected_columns": invalid_columns,
+        "invalid_values": invalid_values,
+        "expected_type": "NUMERIC",
         "confidence": "HIGH"
     }
 
